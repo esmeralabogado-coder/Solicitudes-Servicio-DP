@@ -9,7 +9,6 @@ st.set_page_config(page_title="Gestión de Solicitudes y Actas - Defensoría", p
 st.title("⚖️ Módulo de Solicitud de Servicios y Acta de Derechos")
 st.markdown("---")
 
-# Menú lateral para distinguir la Vista del Defendido y tu Panel Interno
 modo = st.sidebar.selectbox(
     "Seleccionar Vista:",
     ["👤 Vista del Defendido (Formulario y Firma)", "🔒 Panel del Abogado y Supervisor"]
@@ -80,7 +79,6 @@ if modo == "👤 Vista del Defendido (Formulario y Firma)":
                 st.info("📨 Su información ha sido enviada al despacho del abogado para su respectiva radicación institucional.")
 
 else:
-    # Panel Interno para ti y tu supervisor
     st.header("🔒 Panel de Control del Despacho (Abogado y Supervisor)")
     
     st.markdown("### Casos Recibidos Pendientes de Complemento")
@@ -100,6 +98,14 @@ else:
         
     st.markdown("---")
     st.subheader("2. Decisión Adoptada (Supervisión / Coordinación)")
+    decision_adoptada = st.selectbox(
+        "Seleccionar Decisión:",
+        ["Asignación Definitiva de Defensor Público", "Requerimiento de Documentos Adicionales", "Inadmisión de Solicitud"]
+    )
+    observaciones_sup = st.text_area("Observaciones del Supervisor:", value="Aprobada la designación conforme a los requisitos legales.")
+    
+    if st.button("Finalizar y Cerrar Formato Institucional"):
+        st.success("🎉 ¡El formato ha quedado 100% diligenciado, firmado, con huella y cerrado institucionalmente!")
     decision_adoptada = st.selectbox(
         "Seleccionar Decisión:",
         ["Asignación Definitiva de Defensor Público", "Requerimiento de Documentos Adicionales", "Inadmisión de Solicitud"]
