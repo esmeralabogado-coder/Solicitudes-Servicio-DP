@@ -1,6 +1,8 @@
 import streamlit as st
 from streamlit_drawable_canvas import st_canvas
 from PIL import Image
+import io
+from docx import Document
 
 st.set_page_config(page_title="Gestión de Solicitudes y Actas - Defensoría", layout="centered")
 
@@ -95,12 +97,27 @@ else:
     )
 
     if st.button("Finalizar y Cerrar Formato Institucional"):
-        st.success("🎉 ¡El formato ha quedado 100% diligenciado, firmado, con huella y cerrado institucionalmente!")
+        st.success("🎉 ¡El formato ha quedado 100% diligenciado, firmado y cerrado institucionalmente!")
         
-        # Botón para descargar el acta directamente
+        # Generar el documento formal de Word (.docx)
+        doc = Document()
+        doc.add_heading("ACTA DE DERECHOS Y SERVICIOS - DEFENSORÍA PÚBLICA", level=1)
+        doc.add_paragraph("Despacho Judicial: Juzgado 01 Penal del Circuito de Puerto Berrío")
+        doc.add_paragraph(f"Expediente / Caso: {caso_ejemplo}")
+        doc.add_paragraph(f"Orientación Jurídica: {orientacion_brindada}")
+        doc.add_paragraph(f"Decisión Adoptada: {decision_adoptada}")
+        doc.add_paragraph(f"Observaciones: {observaciones_sup}")
+        doc.add_paragraph("\nEstado: Cerrado y Firmado Institucionalmente.")
+        
+        # Guardar en memoria para descarga en Word
+        buffer = io.BytesIO()
+        doc.save(buffer)
+        buffer.seek(0)
+        
+        # Botón para descargar archivo Word real
         st.download_button(
-            label="📥 Descargar Acta Firmada (TXT/PDF)",
-            data=f"ACTA DE DERECHOS Y SERVICIOS - DEFENSORÍA PÚBLICA\nDespacho: Juzgado 01 Penal del Circuito de Puerto Berrío\nExpediente: {caso_ejemplo}\nDecision: {decision_adoptada}\nObservaciones: {observaciones_sup}\nEstado: Cerrado y Firmado Institucionalmente.",
-            file_name="Acta_Defensoria_Caso.txt",
-            mime="text/plain"
+            label="📥 Descargar Acta Institucional en Word (.docx)",
+            data=buffer,
+            file_name="Acta_Defensoria_Formal.docx",
+            mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document"
         )
