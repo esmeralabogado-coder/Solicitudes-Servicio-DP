@@ -2,7 +2,7 @@ import streamlit as st
 import datetime
 from PIL import Image
 from io import BytesIO
-from streamlit_drawable_canvas import st_canvas
+from streamlit_drawable_canvas import st_canvas 
 
 st.set_page_config(page_title="Gestión de Solicitudes y Actas - Defensoría", page_icon="⚖️", layout="wide")
 
