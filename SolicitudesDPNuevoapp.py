@@ -1,8 +1,15 @@
 from io import BytesIO
+import os
 import openpyxl
 import pandas as pd
+from PIL import Image
 import streamlit as st
 from streamlit_drawable_canvas import st_canvas
+
+# Librerías de ReportLab para la generación del PDF
+from reportlab.lib.pagesizes import letter
+from reportlab.pdfgen import canvas
+from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer
 
 # --- Configuración de la Página ---
 st.set_page_config(
@@ -11,7 +18,8 @@ st.set_page_config(
 
 st.title("⚖️ Módulo de Solicitud de Servicios y Acta de Derechos")
 st.markdown(
-    "Sistema de recepción, entrevista inicial y gestión socioeconómica."
+    "Sistema de recepción, entrevista inicial, firma digital y generación de"
+    " PDF institucional."
 )
 
 # --- Menú de Selección de Vista ---
@@ -135,9 +143,9 @@ if vista == "Portal del Ciudadano (Formulario)":
             key="canvas_firma",
         )
 
-        submitted = st.form_submit_button("✅ Enviar Solicitud y Acta Firmada")
+        submitted = st.form_submit_button("✅ Enviar Solicitud y Generar PDF")
 
-    # 3. Procesamiento y Envío a WhatsApp
+    # 3. Procesamiento y Generación de PDF / WhatsApp
     if submitted:
         if not nombres or not cedula or not celular or not direccion:
             st.error(
@@ -150,11 +158,141 @@ if vista == "Portal del Ciudadano (Formulario)":
                 gasto_arriendo + gasto_servicios + gasto_alimentacion
             )
 
-            st.success(
-                "¡Formulario completado con éxito! Haz clic en el botón para"
-                " enviar el reporte vía WhatsApp."
+            # Guardar la firma temporalmente si el usuario dibujó algo
+            firma_path = None
+            if (
+                canvas_result.image_data is not None
+                and canvas_result.image_data.any()
+            ):
+                img_array = canvas_result.image_data
+                img = Image.fromarray(img_array.astype("uint8"), mode="RGBA")
+                # Convertir transparente a blanco para el PDF
+                background = Image.new("RGB", img.size, (255, 255, 255))
+                background.paste(img, mask=img.split()[3])
+                firma_path = "firma_temp.png"
+                background.save(firma_path)
+
+            # Función para generar el PDF institucional
+            def generar_pdf_acta(
+                filename,
+                ruc,
+                rus,
+                despacho,
+                delito,
+                nombres,
+                cedula,
+                edad,
+                celular,
+                direccion,
+                ocupacion,
+                personas_a_cargo,
+                vivienda,
+                total_ingresos,
+                total_gastos,
+                firma_img,
+            ):
+                doc = SimpleDocTemplate(filename, pagesize=letter)
+                story = []
+                from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
+
+                styles = getSampleStyleSheet()
+
+                # Títulos y Encabezado
+                story.append(
+                    Paragraph(
+                        "<b>DEFENSORÍA PÚBLICA - COLOMBIA</b>", styles["Title"]
+                    )
+                )
+                story.append(
+                    Paragraph(
+                        "<b>Formato de Solicitud de Servicios y Acta de"
+                        " Derechos</b>",
+                        styles["Heading2"],
+                    )
+                )
+                story.append(Spacer(1, 12))
+
+                # Contenido del Acta
+                texto_contenido = f"""
+                <b>1. Información del Proceso:</b><br/>
+                • RUC: {ruc} | RUS: {rus}<br/>
+                • Despacho: {despacho}<br/>
+                • Delito Imputado: {delito}<br/><br/>
+                
+                <b>2. Datos Personales del Solicitante:</b><br/>
+                • Nombre: {nombres}<br/>
+                • Cédula: {cedula} (Edad: {edad})<br/>
+                • Celular: {celular}<br/>
+                • Dirección: {direccion}<br/>
+                • Ocupación: {ocupacion}<br/><br/>
+                
+                <b>3. Núcleo Familiar y Vivienda:</b><br/>
+                • Personas a cargo: {personas_a_cargo}<br/>
+                • Condición de Vivienda: {vivienda}<br/><br/>
+                
+                <b>4. Balance Económico Mensual:</b><br/>
+                • Total Ingresos: ${total_ingresos:,.0f} COP<br/>
+                • Total Gastos: ${total_gastos:,.0f} COP<br/><br/>
+                
+                <b>5. Constancia y Declaración:</b><br/>
+                Manifiesto bajo gravedad de juramento que la información aquí"
+                " consignada es verídica y autorizo el trámite ante la"
+                " Defensoría Pública.<br/><br/>
+                """
+                story.append(
+                    Paragraph(texto_contenido, styles["Normal"])
+                )
+                story.append(Spacer(1, 20))
+
+                # Insertar Firma si existe
+                if firma_img and os.path.exists(firma_img):
+                    from reportlab.platypus import Image as RLImage
+
+                    story.append(
+                        Paragraph("<b>Firma del Solicitante:</b>", styles["Normal"])
+                    )
+                    story.append(Spacer(1, 5))
+                    story.append(
+                        RLImage(firma_img, width=200, height=80)
+                    )
+
+                doc.build(story)
+
+            pdf_filename = f"Solicitud_Defensoria_{cedula}.pdf"
+            generar_pdf_acta(
+                pdf_filename,
+                ruc,
+                rus,
+                despacho,
+                delito,
+                nombres,
+                cedula,
+                edad,
+                celular,
+                direccion,
+                ocupacion,
+                personas_a_cargo,
+                vivienda,
+                total_ingresos,
+                total_gastos,
+                firma_path,
             )
 
+            st.success(
+                "¡Formulario procesado y acta PDF generada con éxito!"
+            )
+
+            # Botón de Descarga del PDF Directo
+            with open(pdf_filename, "rb") as pdf_file:
+                bytes_pdf = pdf_file.read()
+                st.download_button(
+                    label="📥 Descargar Acta Firmada en PDF",
+                    data=bytes_pdf,
+                    file_name=pdf_filename,
+                    mime="application/pdf",
+                )
+
+            # Mensaje para WhatsApp
             mensaje_whatsapp = f"""*⚖️ SOLICITUD DE SERVICIOS - DEFENSORÍA PÚBLICA*
 
 *1. Proceso:*
@@ -167,32 +305,23 @@ if vista == "Portal del Ciudadano (Formulario)":
 • Cédula: {cedula} (Edad: {edad})
 • Celular: {celular}
 • Dirección: {direccion}
-• Ocupación: {ocupacion}
 
-*3. Núcleo Familiar y Vivienda:*
-• Personas a cargo: {personas_a_cargo}
-• Vivienda: {vivienda}
+*3. Balance Económico:*
+• Ingresos: ${total_ingresos:,.0f} | Gastos: ${total_gastos:,.0f}
 
-*4. Balance Económico Mensual:*
-• Total Ingresos: ${total_ingresos:,.0f}
-• Total Gastos: ${total_gastos:,.0f}
-
-_El usuario ha registrado sus datos socioeconómicos y firmado la constancia._"""
+_El usuario ha firmado la constancia y generado su PDF oficial._"""
 
             import urllib.parse
 
             texto_codificado = urllib.parse.quote(mensaje_whatsapp)
-            numero_destino = "573167491973"
-            link_whatsapp = (
-                f"https://wa.me/{numero_destino}?text={texto_codificado}"
-            )
+            link_whatsapp = f"https://wa.me/573167491973?text={texto_codificado}"
 
             st.markdown(
                 f"""
             <div style="text-align: center; margin-top: 20px;">
                 <a href="{link_whatsapp}" target="_blank">
                     <button style="background-color: #25D366; color: white; padding: 14px 24px; font-size: 16px; border: none; border-radius: 8px; cursor: pointer; font-weight: bold;">
-                        💬 Enviar Información Completa a mi WhatsApp
+                        💬 Enviar Resumen a mi WhatsApp
                     </button>
                 </a>
             </div>
@@ -205,66 +334,18 @@ _El usuario ha registrado sus datos socioeconómicos y firmado la constancia._""
 # ==========================================
 elif vista == "Panel del Abogado y Supervisor":
     st.header("🔒 Panel de Control del Despacho (Abogado y Supervisor)")
-    st.subheader("Casos Recibidos Pendientes de Complemento")
+    st.subheader("Casos Recibidos y Exportación Excel")
 
-    expediente_sel = st.selectbox(
-        "Seleccionar expediente:",
-        [
-            "[RUC-2026-0042] - JUAN PÉREZ - Porte de Armas",
-            "[RUC-2026-0043] - Otro Caso Ejemplo",
-        ],
-    )
-
-    st.markdown("---")
-    st.subheader("👤 Datos del Solicitante / Procesado")
-    orientacion = st.text_area(
-        "Tipo de orientación brindada:",
-        value=(
-            "Se efectúa entrevista inicial con el procesado, explicación"
-            " detallada de los cargos imputados, análisis de elementos materiales"
-            " probatorios y estructuración de la estrategia defensiva inicial."
-        ),
-    )
-
-    if st.button("Guardar Orientación del Abogado"):
-        st.success("¡Orientación del abogado guardada con éxito!")
-
-    st.markdown("---")
-    st.subheader("2. Decisión Adoptada (Supervisión / Coordinación)")
-    decision = st.selectbox(
-        "Seleccionar Decisión:",
-        [
-            "Asignación Definitiva de Defensor Público",
-            "Inadmisión por Ingresos Superiores",
-            "Requerimiento de Soportes Adicionales",
-        ],
-    )
-    observaciones_sup = st.text_area(
-        "Observaciones del Supervisor:",
-        value="Aprobada la designación conforme a los requisitos legales.",
-    )
-
-    if st.button("Finalizar y cerrar formato institucional"):
-        st.success("¡Formato institucional cerrado y registrado con éxito!")
-
-    st.markdown("---")
-    st.subheader("📥 Exportar Planilla de Excel")
     try:
         wb = openpyxl.load_workbook("SD-P02-F91 SOLICITUD DEL SERVICIO.xlsx")
-        ws = wb.active
-
         buffer = BytesIO()
         wb.save(buffer)
         buffer.seek(0)
-
         st.download_button(
-            label="📥 Descargar Formato Excel Institucional Lleno",
+            label="📥 Descargar Formato Excel Institucional",
             data=buffer,
             file_name="SD-P02-F91_Diligenciado.xlsx",
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         )
     except Exception as e:
-        st.info(
-            "Nota: El archivo de plantilla Excel local se cargará y exportará"
-            " cuando esté disponible en el directorio."
-        )
+        st.info("La plantilla de Excel se exportará al estar disponible.")
